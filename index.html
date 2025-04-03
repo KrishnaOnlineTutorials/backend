@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRUD Operations</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        header {
+            background-color: #333;
+            color: #fff;
+            padding: 10px 0;
+            text-align: center;
+        }
+        nav {
+            display: flex;
+            justify-content: center;
+            background-color: #444;
+        }
+        nav a {
+            color: #fff;
+            padding: 14px 20px;
+            text-decoration: none;
+            text-align: center;
+        }
+        nav a:hover {
+            background-color: #555;
+        }
+        .container {
+            padding: 20px;
+        }
+        .form-container, .list-container {
+            display: none;
+        }
+        .form-container.active, .list-container.active {
+            display: block;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        form input, form button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        ul li {
+            background-color: #fff;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        ul li button {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>CRUD Operations</h1>
+    </header>
+    <nav>
+        <a href="#" id="readLink">Read</a>
+        <a href="#" id="createLink">Create</a>
+    </nav>
+    <div class="container">
+        <div class="form-container" id="formContainer">
+            <form id="dataForm">
+                <input type="hidden" id="dataId">
+                <input type="text" id="dataField1" placeholder="Enter field 1" required>
+                <input type="text" id="dataField2" placeholder="Enter field 2" required>
+                <button type="submit">Submit</button>
+            </form>
+        </div>
+        <div class="list-container active" id="listContainer">
+            <h2>Data List</h2>
+            <ul id="dataList"></ul>
+            <p id="errorMessage" style="color: red; display: none;">No data available.</p>
+        </div>
+    </div>
+
+    <script>
+        const apiUrl = 'http://localhost:5000';
+        const readLink = document.getElementById('readLink');
+        const createLink = document.getElementById('createLink');
+        const formContainer = document.getElementById('formContainer');
+        const listContainer = document.getElementById('listContainer');
+        const dataForm = document.getElementById('dataForm');
+        const dataId = document.getElementById('dataId');
+        const dataField1 = document.getElementById('dataField1');
+        const dataField2 = document.getElementById('dataField2');
+        const dataList = document.getElementById('dataList');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Function to switch between views
+        const showView = (view) => {
+            if (view === 'create') {
+                formContainer.classList.add('active');
+                listContainer.classList.remove('active');
+            } else {
+                formContainer.classList.remove('active');
+                listContainer.classList.add('active');
+                fetchData();
+            }
+        };
+
+        // Event listeners for navigation links
+        readLink.addEventListener('click', () => showView('read'));
+        createLink.addEventListener('click', () => showView('create'));
+
+        // Function to fetch and display data
+        const fetchData = async () => {
+            const response = await fetch(`${apiUrl}/read`);
+            const data = await response.json();
+            dataList.innerHTML = '';
+            if (data.length === 0) {
+                errorMessage.style.display = 'block';
+            } else {
+                errorMessage.style.display = 'none';
+                data.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = `${item.field1} - ${item.field2}`;
+                    li.id = item.id;
+
+                    const viewButton = document.createElement('button');
+                    viewButton.textContent = 'View';
+                    viewButton.onclick = () => viewData(item.id);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.textContent = 'Delete';
+                    deleteButton.onclick = () => deleteData(item.id);
+
+                    const updateButton = document.createElement('button');
+                    updateButton.textContent = 'Update';
+                    updateButton.onclick = () => updateData(item.id);
+
+                    li.appendChild(viewButton);
+                    li.appendChild(deleteButton);
+                    li.appendChild(updateButton);
+                    dataList.appendChild(li);
+                });
+            }
+        };
+
+        // Function to add or update data
+        dataForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = dataId.value;
+            const data = {
+                field1: dataField1.value,
+                field2: dataField2.value
+            };
+            if (id) {
+                await fetch(`${apiUrl}/update/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+            } else {
+                await fetch(`${apiUrl}/create`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+            }
+            dataId.value = '';
+            dataField1.value = '';
+            dataField2.value = '';
+            showView('read');
+        });
+
+        // Function to view data
+        const viewData = async (id) => {
+            const response = await fetch(`${apiUrl}/read`);
+            const data = await response.json();
+            const item = data.find(d => d.id === id);
+            alert(`Field 1: ${item.field1}\nField 2: ${item.field2}`);
+        };
+
+        // Function to delete data
+        const deleteData = async (id) => {
+            await fetch(`${apiUrl}/delete/${id}`, {
+                method: 'DELETE'
+            });
+            fetchData();
+        };
+
+        // Function to update data
+        const updateData = async (id) => {
+            const response = await fetch(`${apiUrl}/read`);
+            const data = await response.json();
+            const item = data.find(d => d.id === id);
+            dataId.value = item.id;
+            dataField1.value = item.field1;
+            dataField2.value = item.field2;
+            showView('create');
+        };
+
+        // Initial fetch of data
+        fetchData();
+    </script>
+</body>
+</html>
