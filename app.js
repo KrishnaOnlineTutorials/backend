@@ -13,7 +13,7 @@ app.use(cors());
 app.post('/users', mongoDB.createUser);
 
 // Read all records
-app.get('/users', mongoDB.getUsers);
+app.get('/users', mongoDB.authenticateToken, mongoDB.getUsers);
 
 // delete a document
 app.delete('/users/:id', mongoDB.deleteUser);

@@ -1,5 +1,7 @@
 const { MongoClient } = require('mongodb');
 const ObjectId = require('mongodb').ObjectId; // Import ObjectId from mongodb
+const jwt = require('jsonwebtoken');
+const secretKey = "mern-app"
 
 const uri = 'mongodb+srv://krishnaonlinetutorials:qwerty123456789@cluster0.jwtby.mongodb.net/mern_testing?retryWrites=true&w=majority'; // Replace with your connection string
 
@@ -136,7 +138,8 @@ const authenticateUser = async (req, res) => {
         const user = await authCollection.findOne({email, password})
 
         if (user) {
-            res.json({ message: 'Authentication successful', user });
+            const token = jwt.sign({ email: user.email }, secretKey, { expiresIn: '1h' }); // Generate a JWT token
+            res.json({ message: 'Authentication successful', user, token });
         } else {
             res.status(401).json({ error: 'Invalid email or password' });
         }
@@ -148,8 +151,29 @@ const authenticateUser = async (req, res) => {
     }
 };
 
+const authenticateToken = (req, res, next) => {
+    console.group('Reading headers')
+    console.log(req.headers)
+    console.groupEnd()
+    const authHeader = req.headers['authorization'];
+    // authorization: Bearer <token>
+    const token = authHeader && authHeader.split(' ')[1]; // Get the token from the header
+
+    if(!token) {
+        return res.sendStatus(401); // Unauthorized
+    }
+    jwt.verify(token, secretKey, (err, user) => {
+        if(err) {
+            return res.sendStatus(403); // Forbidden
+        }
+        req.user = user; // Attach the user to the request object
+        next(); // Call the next middleware or route handler
+    });
+}
+
 
 exports.createUser = createUser;
 exports.getUsers = getUsers;
 exports.deleteUser = deleteUser;
 exports.authenticateUser = authenticateUser;
+exports.authenticateToken = authenticateToken;
