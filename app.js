@@ -12,10 +12,12 @@ app.use(cors());
 // Create a new record
 app.post('/users', mongoDB.createUser);
 
-// Read all records
-app.get('/users', mongoDB.authenticateToken, mongoDB.getUsers);
+app.get('/users', mongoDB.getUsers);
 
-// delete a document
+app.get('/users/:id', mongoDB.getUserById);
+
+app.put('/users/:id', mongoDB.editUser);
+
 app.delete('/users/:id', mongoDB.deleteUser);
 
 app.post('/auth', mongoDB.authenticateUser);
