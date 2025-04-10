@@ -1,26 +1,27 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const mongoDB =  require('./mongoDB');
-const PORT = process.env.PORT || 5000;
-const app = express();
 const cors = require('cors');
+const mongoose = require('mongoose');
+const userRoutes = require('./routes/users');
+const authRoutes = require('./routes/auth');
+const PORT = process.env.PORT || 5000;
+const { constructMongoURI } = require('./helpers/dbHelpers'); // Import the helper function
+
+const app = express();
 
 app.use(bodyParser.json());
 app.use(cors());
 
-//http://localhost:5000/users
-// Create a new record
-app.post('/users', mongoDB.createUser);
+const uri = constructMongoURI(); // Use the helper function to construct the URI
 
-app.get('/users', mongoDB.getUsers);
+// Connect to MongoDB using Mongoose
+mongoose.connect(uri, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Connected to MongoDB using Mongoose'))
+    .catch(err => console.error('Error connecting to MongoDB:', err.message));
 
-app.get('/users/:id', mongoDB.getUserById);
-
-app.put('/users/:id', mongoDB.editUser);
-
-app.delete('/users/:id', mongoDB.deleteUser);
-
-app.post('/auth', mongoDB.authenticateUser);
+// Routes
+app.use('/users', userRoutes);
+app.use('/auth', authRoutes);
 
 app.listen(PORT, () => {
     console.log(`Server is running on Port: ${PORT}`);

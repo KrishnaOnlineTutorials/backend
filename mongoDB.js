@@ -1,160 +1,98 @@
-const { MongoClient } = require('mongodb');
-const ObjectId = require('mongodb').ObjectId; // Import ObjectId from mongodb
 const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
-const secretKey = process.env.secretKey
-
-const { constructMongoURI } = require('./helpers/dbHelpers'); // Import the helper function
-const uri = constructMongoURI(); // Use the helper function to construct the URI
-
+const { User, Auth } = require('./models/User'); // Import Mongoose models
+const secretKey = process.env.secretKey;
 
 const createUser = async (req, res) => {
-    const newUser = {
+    const decryptedPassword = CryptoJS.AES.decrypt(req.body.password, 'secret-key').toString(CryptoJS.enc.Utf8);
+
+    const newUser = new User({
         name: req.body.name,
         email: req.body.email,
         age: req.body.age,
-        // password: req.body.password,
-    }
-    const decryptedPassword = CryptoJS.AES.decrypt(req.body.password, 'secret-key').toString(CryptoJS.enc.Utf8);
-    const authData = {
-        email: req.body.email,
-        password: decryptedPassword
-    }
-    const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
-    try {
-        await client.connect();
-        console.log('Connected to MongoDB Atlas');
-        const database = client.db('mern_testing'); // Replace with your database name
-        const collection = database.collection('users'); // Replace with your collection name
-        await collection.insertOne(newUser);
+    });
 
-        const authCollection = database.collection('auth'); // Replace with your collection name
-        await authCollection.insertOne(authData);
+    const authData = new Auth({
+        email: req.body.email,
+        password: decryptedPassword,
+    });
+
+    try {
+        await newUser.save();
+        await authData.save();
+        res.json(newUser);
     } catch (err) {
-        console.error('Error connecting to MongoDB Atlas:', err.message);
-    } finally { 
-        await client.close();
+        console.error('Error saving user/auth:', err.message);
+        res.status(500).json({ error: 'Failed to create user' });
     }
-    res.json(newUser);
-}
+};
 
 const getUsers = async (req, res) => {
-    const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
-    let users;
     try {
-        await client.connect();
-        const database = client.db('mern_testing');
-        users = await database.collection('users').find().toArray();
+        const users = await User.find();
+        res.json(users);
     } catch (err) {
-        console.error('Error connecting to MongoDB Atlas:', err.message);
-    } 
-    finally {
-        await client.close();
+        console.error('Error fetching users:', err.message);
+        res.status(500).json({ error: 'Failed to fetch users' });
     }
-    res.json(users);
-}
+};
 
-// New editUser function
 const editUser = async (req, res) => {
-    const userId = req.params.id; // Get the user ID from the request parameters
-    const updatedData = req.body; // Get the updated data from the request body
-
-    const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+    const userId = req.params.id;
+    const updatedData = req.body;
 
     try {
-        await client.connect();
-        console.log('Connected to MongoDB Atlas');
-        const database = client.db('mern_testing');
-        const collection = database.collection('users');
-
-        // Update the user by ID
-        const result = await collection.updateOne(
-            { _id: new ObjectId(userId) }, // Filter by user ID
-            { $set: updatedData } // Update with the new data
-        );
-        if (result.matchedCount === 0) {
+        const result = await User.findByIdAndUpdate(userId, updatedData, { new: true });
+        if (!result) {
             res.status(404).json({ error: 'User not found' });
         } else {
-            res.json({ message: 'User updated successfully' });
+            res.json({ message: 'User updated successfully', user: result });
         }
     } catch (err) {
-        console.error('Error connecting to MongoDB Atlas:', err.message);
+        console.error('Error updating user:', err.message);
         res.status(500).json({ error: 'Failed to update user' });
-    } finally {
-        await client.close();
     }
 };
 
 const deleteUser = async (req, res) => {
-    const userId = req.params.id; // Get the user ID from the request parameters
-    const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+    const userId = req.params.id;
 
     try {
-        await client.connect();
-        console.log('Connected to MongoDB Atlas');
-        const database = client.db('mern_testing');
-        const userCollection = database.collection('users');
-        const authCollection = database.collection('auth');
-
-        // Find the user by ID
-        const userData = await userCollection.findOne({ _id: new ObjectId(userId) });
-        if (!userData) {
+        const user = await User.findById(userId);
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        // Find the corresponding auth record by email
-        const authData = await authCollection.findOne({ email: userData.email });
-        if (!authData) {
+        const auth = await Auth.findOne({ email: user.email });
+        if (!auth) {
             return res.status(404).json({ error: 'Auth record not found' });
         }
 
-        // Delete the user and auth records
-        const userDeleteResult = await userCollection.deleteOne({ _id: new ObjectId(userId) });
-        const authDeleteResult = await authCollection.deleteOne({ _id: new ObjectId(authData._id) });
+        await User.deleteOne({ _id: userId });
+        await Auth.deleteOne({ email: user.email });
 
-        // Check if both deletions were successful
-        if (userDeleteResult.deletedCount === 1 && authDeleteResult.deletedCount === 1) {
-            res.json({ message: 'User and Auth record deleted successfully' });
-        } else {
-            res.status(500).json({ error: 'Failed to delete user or auth record' });
-        }
+        res.json({ message: 'User and Auth record deleted successfully' });
     } catch (err) {
-        console.error('Error connecting to MongoDB Atlas:', err.message);
+        console.error('Error deleting user/auth:', err.message);
         res.status(500).json({ error: 'Failed to delete user' });
-    } finally {
-        await client.close();
     }
 };
 
-// New /auth handler
 const authenticateUser = async (req, res) => {
-    const { email, password } = req.body; // Extract email and password from the request body
+    const { email, password } = req.body;
     const decryptedPassword = CryptoJS.AES.decrypt(password, 'secret-key').toString(CryptoJS.enc.Utf8);
 
-    const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
-
     try {
-        await client.connect();
-        console.log('Connected to MongoDB Atlas');
-        const database = client.db('mern_testing');
-        const authCollection = database.collection('auth');
-        const userCollection = database.collection('users');
-
-        // Find the user in the auth collection
-        const authData = await authCollection.findOne({ email: email, password: decryptedPassword });
-        const userData = await userCollection.findOne({email: email}) 
+        const authData = await Auth.findOne({ email, password: decryptedPassword });
+        const userData = await User.findOne({ email });
 
         if (!authData) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
 
-        // Assign role based on email
         const role = email === 'admin@gmail.com' ? 'admin' : 'user';
-
-        // Generate a JWT token with the role included
         const token = jwt.sign({ email: authData.email, role }, secretKey, { expiresIn: '1h' });
 
-        // Respond with user details, role, and token
         res.json({
             message: 'Authentication successful',
             user: { email: userData.email, role, id: userData._id },
@@ -163,62 +101,44 @@ const authenticateUser = async (req, res) => {
     } catch (err) {
         console.error('Error during authentication:', err.message);
         res.status(500).json({ error: 'Failed to authenticate user' });
-    } finally {
-        await client.close();
     }
 };
 
 const authenticateToken = (req, res, next) => {
-    console.group('Reading headers');
-    console.log(req.headers);
-    console.groupEnd();
-
     const authHeader = req.headers['authorization'];
-    // Authorization: Bearer <token>
-    const token = authHeader && authHeader.split(' ')[1]; // Extract the token from the header
+    const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-        return res.status(401).json({ error: 'Unauthorized: No token provided' }); // Unauthorized
+        return res.status(401).json({ error: 'Unauthorized: No token provided' });
     }
 
     jwt.verify(token, secretKey, (err, decodedToken) => {
         if (err) {
-            return res.status(403).json({ error: 'Forbidden: Invalid or expired token' }); // Forbidden
+            return res.status(403).json({ error: 'Forbidden: Invalid or expired token' });
         }
 
-        // Attach the decoded token (including role) to the request object
         req.user = {
             email: decodedToken.email,
             role: decodedToken.role,
         };
 
-        console.log('Authenticated user:', req.user); // Debugging: Log the authenticated user
-        next(); // Call the next middleware or route handler
+        next();
     });
 };
 
 const getUserById = async (req, res) => {
-    const userId = req.params.id; // Extract the user ID from the request parameters
-    const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+    const userId = req.params.id;
 
     try {
-        await client.connect();
-        const database = client.db('mern_testing');
-        const usersCollection = database.collection('users');
-
-        // Find the user by ID
-        const user = await usersCollection.findOne({ _id: new ObjectId(userId) });
-
+        const user = await User.findById(userId);
         if (!user) {
-            return res.status(404).json({ error: 'User not found' }); // Return 404 if user is not found
+            return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json(user); // Return the user details
+        res.json(user);
     } catch (err) {
         console.error('Error fetching user by ID:', err.message);
-        res.status(500).json({ error: 'Failed to fetch user' }); // Return 500 for server errors
-    } finally {
-        await client.close();
+        res.status(500).json({ error: 'Failed to fetch user' });
     }
 };
 
