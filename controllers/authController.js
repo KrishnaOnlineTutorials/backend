@@ -1,7 +1,8 @@
+require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
 const { Auth, User } = require('../models/User');
-const secretKey = process.env.secretKey;
+const secretKey = process.env.SECRET_KEY;
 
 const authenticateUser = async (req, res) => {
     const { email, password } = req.body;
@@ -17,6 +18,7 @@ const authenticateUser = async (req, res) => {
         }
 
         const role = email === 'admin@gmail.com' ? 'admin' : 'user';
+        console.log(secretKey)
         const token = jwt.sign({ email: authData.email, role }, secretKey, { expiresIn: '1h' });
 
         res.status(200).json({
