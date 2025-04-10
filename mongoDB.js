@@ -2,9 +2,11 @@ const { MongoClient } = require('mongodb');
 const ObjectId = require('mongodb').ObjectId; // Import ObjectId from mongodb
 const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
-const secretKey = "mern-app"
+const secretKey = process.env.secretKey
 
-const uri = 'mongodb+srv://krishnaonlinetutorials:qwerty123456789@cluster0.jwtby.mongodb.net/mern_testing?retryWrites=true&w=majority'; // Replace with your connection string
+const { constructMongoURI } = require('./helpers/dbHelpers'); // Import the helper function
+const uri = constructMongoURI(); // Use the helper function to construct the URI
+
 
 const createUser = async (req, res) => {
     const newUser = {
@@ -66,7 +68,10 @@ const editUser = async (req, res) => {
         const collection = database.collection('users');
 
         // Update the user by ID
-        // Write some logic here to update the user in the database
+        const result = await collection.updateOne(
+            { _id: new ObjectId(userId) }, // Filter by user ID
+            { $set: updatedData } // Update with the new data
+        );
         if (result.matchedCount === 0) {
             res.status(404).json({ error: 'User not found' });
         } else {
@@ -80,7 +85,6 @@ const editUser = async (req, res) => {
     }
 };
 
-// New deleteUser function
 const deleteUser = async (req, res) => {
     const userId = req.params.id; // Get the user ID from the request parameters
     const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
@@ -92,27 +96,27 @@ const deleteUser = async (req, res) => {
         const userCollection = database.collection('users');
         const authCollection = database.collection('auth');
 
-
-        const userData = await userCollection.findOne({_id: new ObjectId(userId)}) 
-        console.log(userData)
-        const authData = await authCollection.findOne({email: userData.email})
-        console.log(authData)
-        // Delete the user by ID
-        // Write some logic here to delete the user from the database
-        const result = await userCollection.deleteOne({ _id: new ObjectId(userId)})
-        console.log(result)
-        const resultTwo = await authCollection.deleteOne({ _id: new ObjectId(authData._id)})
-        console.log(resultTwo)
-
-        if (result.deletedCount === 1) {
-            res.json({ message: 'User deleted successfully' });
-        } else {
-            res.status(404).json({ error: 'User not found' });
+        // Find the user by ID
+        const userData = await userCollection.findOne({ _id: new ObjectId(userId) });
+        if (!userData) {
+            return res.status(404).json({ error: 'User not found' });
         }
-        if (resultTwo.deletedCount === 1) {
-            res.json({ message: 'Auth user deleted successfully' });
+
+        // Find the corresponding auth record by email
+        const authData = await authCollection.findOne({ email: userData.email });
+        if (!authData) {
+            return res.status(404).json({ error: 'Auth record not found' });
+        }
+
+        // Delete the user and auth records
+        const userDeleteResult = await userCollection.deleteOne({ _id: new ObjectId(userId) });
+        const authDeleteResult = await authCollection.deleteOne({ _id: new ObjectId(authData._id) });
+
+        // Check if both deletions were successful
+        if (userDeleteResult.deletedCount === 1 && authDeleteResult.deletedCount === 1) {
+            res.json({ message: 'User and Auth record deleted successfully' });
         } else {
-            res.status(404).json({ error: 'Auth User not found' });
+            res.status(500).json({ error: 'Failed to delete user or auth record' });
         }
     } catch (err) {
         console.error('Error connecting to MongoDB Atlas:', err.message);
@@ -126,7 +130,6 @@ const deleteUser = async (req, res) => {
 const authenticateUser = async (req, res) => {
     const { email, password } = req.body; // Extract email and password from the request body
     const decryptedPassword = CryptoJS.AES.decrypt(password, 'secret-key').toString(CryptoJS.enc.Utf8);
-    console.log(decryptedPassword)
 
     const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
