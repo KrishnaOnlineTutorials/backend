@@ -2,14 +2,14 @@ require('dotenv').config();
 const jwt = require('jsonwebtoken');
 const CryptoJS = require('crypto-js');
 const { Auth, User } = require('../models/User');
-const secretKey = process.env.SECRET_KEY;
+const secretKeyJWT = process.env.SECRET_KEY_JWT;
+const secretKeyCrypto = process.env.SECRET_KEY_CRYPTO;
 
 const authenticateUser = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const decryptedPassword = CryptoJS.AES.decrypt(password, 'secret-key').toString(CryptoJS.enc.Utf8);
-
+        const decryptedPassword = CryptoJS.AES.decrypt(password, secretKeyCrypto).toString(CryptoJS.enc.Utf8);
         const authData = await Auth.findOne({ email, password: decryptedPassword });
         const userData = await User.findOne({ email });
 
@@ -18,8 +18,7 @@ const authenticateUser = async (req, res) => {
         }
 
         const role = email === 'admin@gmail.com' ? 'admin' : 'user';
-        console.log(secretKey)
-        const token = jwt.sign({ email: authData.email, role }, secretKey, { expiresIn: '1h' });
+        const token = jwt.sign({ email: authData.email, role }, secretKeyJWT, { expiresIn: '1h' });
 
         res.status(200).json({
             message: 'Authentication successful',
@@ -40,7 +39,7 @@ const authenticateToken = (req, res, next) => {
         return res.status(401).json({ error: 'Unauthorized: No token provided' });
     }
 
-    jwt.verify(token, secretKey, (err, decodedToken) => {
+    jwt.verify(token, secretKeyJWT, (err, decodedToken) => {
         if (err) {
             return res.status(403).json({ error: 'Forbidden: Invalid or expired token' });
         }
