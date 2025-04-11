@@ -1,10 +1,12 @@
+require('dotenv').config();
 const { User, Auth } = require('../models/User');
 const CryptoJS = require('crypto-js');
+const secretKeyCrypto = process.env.SECRET_KEY_CRYPTO;
 
 const createUser = async (req, res) => {
+    const { name, email, age, password } = req.body;
     try {
-        const decryptedPassword = CryptoJS.AES.decrypt(req.body.password, 'secret-key').toString(CryptoJS.enc.Utf8);
-
+        const decryptedPassword = CryptoJS.AES.decrypt(req.body.password, secretKeyCrypto).toString(CryptoJS.enc.Utf8);
         const newUser = new User({
             name: req.body.name,
             email: req.body.email,
